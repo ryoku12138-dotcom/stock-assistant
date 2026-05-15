@@ -2,11 +2,20 @@
 Stock Assistant — Main entry point.
 Modes: morning (盘前预警), daily (收盘日报), weekly (周五周报)
 """
+import os
 import sys
 import argparse
 import time as time_mod
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone, tzinfo
+
+# Beijing timezone (UTC+8)
+_BJT = timezone(timedelta(hours=8))
+
+
+def now_bjt() -> datetime:
+    """Return current Beijing time (UTC+8)."""
+    return datetime.now(_BJT)
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -124,7 +133,7 @@ def run_morning():
     watchlist = config["watchlist"]
     notifier = FeishuNotifier()
 
-    now = datetime.now()
+    now = now_bjt()
     lines = [f"**盘前预警 | {now.strftime('%Y-%m-%d %H:%M')}**", ""]
 
     for entry in watchlist:
@@ -174,7 +183,7 @@ def run_daily():
     config = get_config()
     watchlist = config["watchlist"]
     notifier = FeishuNotifier()
-    now = datetime.now()
+    now = now_bjt()
 
     print(f"Daily report — {now.strftime('%Y-%m-%d %H:%M')}")
     print(f"Watchlist: {len(watchlist)} stocks")
@@ -225,7 +234,7 @@ def run_weekly():
     config = get_config()
     watchlist = config["watchlist"]
     notifier = FeishuNotifier()
-    now = datetime.now()
+    now = now_bjt()
 
     print(f"Weekly report — {now.strftime('%Y-%m-%d %H:%M')}")
 
@@ -324,7 +333,7 @@ def main():
 
     print("=" * 60)
     print(f"  Stock Assistant — {args.mode.upper()} MODE")
-    print(f"  Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  Time: {now_bjt().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
     if args.mode == "morning":

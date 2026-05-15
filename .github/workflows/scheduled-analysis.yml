@@ -2,14 +2,14 @@ name: Stock Assistant Scheduled Analysis
 
 on:
   schedule:
-    # 每个交易日 09:00 北京时间 (01:00 UTC) — 盘前预警
+    # 交易日 09:00 北京时间 = 01:00 UTC
     - cron: "0 1 * * 1-5"
-    # 每个交易日 16:30 北京时间 (08:30 UTC) — 收盘日报
+    # 交易日 16:30 北京时间 = 08:30 UTC
     - cron: "30 8 * * 1-5"
-    # 每周五 17:00 北京时间 (09:00 UTC) — 周报
+    # 周五 17:00 北京时间 = 09:00 UTC
     - cron: "0 9 * * 5"
 
-  # Allow manual trigger
+  # Manual trigger for testing
   workflow_dispatch:
     inputs:
       mode:
@@ -25,6 +25,9 @@ jobs:
   analyze:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
+    env:
+      TZ: Asia/Shanghai
 
     steps:
       - name: Checkout code
@@ -52,14 +55,9 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "mode=${{ inputs.mode }}" >> $GITHUB_OUTPUT
           else
-            HOUR_UTC=$(date +%H)
-            MINUTE_UTC=$(date +%M)
-            DAY_OF_WEEK=$(date +%u)
-            TIME="${HOUR_UTC}:${MINUTE_UTC}"
-            echo "UTC time: $TIME, Day: $DAY_OF_WEEK"
-            # 01:00 UTC = 09:00 BJT -> morning
-            # 08:30 UTC = 16:30 BJT -> daily
-            # 09:00 UTC = 17:00 BJT on Friday -> weekly
+            HOUR_UTC=$(date -u +%H)
+            DAY_OF_WEEK=$(date -u +%u)
+            echo "UTC: ${HOUR_UTC}:00, Day: ${DAY_OF_WEEK}"
             if [ "$HOUR_UTC" = "01" ]; then
               echo "mode=morning" >> $GITHUB_OUTPUT
             elif [ "$HOUR_UTC" = "08" ]; then
@@ -70,10 +68,11 @@ jobs:
               echo "mode=daily" >> $GITHUB_OUTPUT
             fi
           fi
-          echo "Running mode: $(cat $GITHUB_OUTPUT)"
+          echo "Selected mode: $(cat $GITHUB_OUTPUT)"
 
       - name: Run Stock Assistant
         env:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          TZ: Asia/Shanghai
         run: python main.py --mode ${{ steps.mode.outputs.mode }}
