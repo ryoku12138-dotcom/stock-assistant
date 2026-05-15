@@ -1,0 +1,64 @@
+# ==================== Stock Assistant Config ====================
+# Phase 1: Self-selected stock monitoring
+
+# ---- Feishu ----
+feishu:
+  webhook_url: "${FEISHU_WEBHOOK_URL}"  # Set via env var or GitHub Secrets
+
+# ---- AKShare ----
+akshare:
+  retry_count: 3
+  retry_delay: 2  # seconds between retries
+
+# ---- DeepSeek V3 ----
+deepseek:
+  api_key: "${DEEPSEEK_API_KEY}"  # Set via env var or GitHub Secrets
+  base_url: "https://api.deepseek.com"
+  model: "deepseek-chat"
+  max_tokens: 2048
+  temperature: 0.3
+
+# ---- Technical Indicators ----
+indicators:
+  ma_periods: [5, 10, 20]
+  macd:
+    fast: 12
+    slow: 26
+    signal: 9
+  rsi:
+    period: 14
+  kdj:
+    k_period: 9
+    d_period: 3
+    j_period: 3
+  bollinger:
+    period: 20
+    std_dev: 2
+
+# ---- Watchlist (self-selected stocks) ----
+# Format: code: name (name is used in notifications, no API call needed)
+watchlist:
+  - code: "000001"
+    name: "平安银行"
+  - code: "600519"
+    name: "贵州茅台"
+  - code: "000858"
+    name: "五粮液"
+  - code: "300750"
+    name: "宁德时代"
+  - code: "600036"
+    name: "招商银行"
+  - code: "601318"
+    name: "中国平安"
+  - code: "000333"
+    name: "美的集团"
+  - code: "002415"
+    name: "海康威视"
+  - code: "600276"
+    name: "恒瑞医药"
+  - code: "300059"
+    name: "东方财富"
+
+# ---- Schedule ----
+schedule:
+  run_time: "15:00"  # daily run time (market close)

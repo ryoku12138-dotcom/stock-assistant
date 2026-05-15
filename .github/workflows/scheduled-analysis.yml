@@ -1,0 +1,79 @@
+name: Stock Assistant Scheduled Analysis
+
+on:
+  schedule:
+    # 每个交易日 09:00 北京时间 (01:00 UTC) — 盘前预警
+    - cron: "0 1 * * 1-5"
+    # 每个交易日 16:30 北京时间 (08:30 UTC) — 收盘日报
+    - cron: "30 8 * * 1-5"
+    # 每周五 17:00 北京时间 (09:00 UTC) — 周报
+    - cron: "0 9 * * 5"
+
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "运行模式"
+        required: true
+        type: choice
+        options:
+          - morning
+          - daily
+          - weekly
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Determine mode
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ inputs.mode }}" >> $GITHUB_OUTPUT
+          else
+            HOUR_UTC=$(date +%H)
+            MINUTE_UTC=$(date +%M)
+            DAY_OF_WEEK=$(date +%u)
+            TIME="${HOUR_UTC}:${MINUTE_UTC}"
+            echo "UTC time: $TIME, Day: $DAY_OF_WEEK"
+            # 01:00 UTC = 09:00 BJT -> morning
+            # 08:30 UTC = 16:30 BJT -> daily
+            # 09:00 UTC = 17:00 BJT on Friday -> weekly
+            if [ "$HOUR_UTC" = "01" ]; then
+              echo "mode=morning" >> $GITHUB_OUTPUT
+            elif [ "$HOUR_UTC" = "08" ]; then
+              echo "mode=daily" >> $GITHUB_OUTPUT
+            elif [ "$HOUR_UTC" = "09" ] && [ "$DAY_OF_WEEK" = "5" ]; then
+              echo "mode=weekly" >> $GITHUB_OUTPUT
+            else
+              echo "mode=daily" >> $GITHUB_OUTPUT
+            fi
+          fi
+          echo "Running mode: $(cat $GITHUB_OUTPUT)"
+
+      - name: Run Stock Assistant
+        env:
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: python main.py --mode ${{ steps.mode.outputs.mode }}
