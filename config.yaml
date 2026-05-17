@@ -38,26 +38,17 @@ indicators:
 # ---- Watchlist (self-selected stocks) ----
 # Format: code: name (name is used in notifications, no API call needed)
 watchlist:
-  - code: "000001"
-    name: "平安银行"
-  - code: "600519"
-    name: "贵州茅台"
-  - code: "000858"
-    name: "五粮液"
-  - code: "300750"
-    name: "宁德时代"
-  - code: "600036"
-    name: "招商银行"
-  - code: "601318"
-    name: "中国平安"
-  - code: "000333"
-    name: "美的集团"
-  - code: "002415"
-    name: "海康威视"
-  - code: "600276"
-    name: "恒瑞医药"
-  - code: "300059"
-    name: "东方财富"
+  - code: "603739"
+    name: "蔚蓝生物"
+  - code: "603598"
+    name: "引力传媒"
+  - code: "600151"
+    name: "航天机电"
+  - code: "603978"
+    name: "深圳新星"
+  - code: "600879"
+    name: "航天电子"
+
 
 # ---- Schedule ----
 schedule:
