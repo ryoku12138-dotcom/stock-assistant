@@ -40,16 +40,25 @@ class FeishuNotifier:
             return False
 
     def send_signal(self, stock_code: str, stock_name: str, signal: str,
-                    indicators: dict, ai_summary: str) -> bool:
-        """Send a formatted buy/sell signal card."""
-        color = "red" if "buy" in signal.lower() or "买入" in signal else "green"
+                    ai_summary: str) -> bool:
+        """Send AI analysis card. The AI output is displayed directly."""
+        color = "red" if signal == "BUY" else ("green" if signal == "SELL" else "blue")
+        # Extract score from AI output for header
+        header_title = f"{stock_name}({stock_code})"
+        if signal == "BUY":
+            header_title += " | 买入信号"
+        elif signal == "SELL":
+            header_title += " | 卖出信号"
+        else:
+            header_title += " | 观望"
+
         payload = {
             "msg_type": "interactive",
             "card": {
                 "header": {
                     "title": {
                         "tag": "plain_text",
-                        "content": f"{stock_name}({stock_code}) {signal}"
+                        "content": header_title
                     },
                     "template": color
                 },
@@ -58,7 +67,7 @@ class FeishuNotifier:
                         "tag": "div",
                         "text": {
                             "tag": "lark_md",
-                            "content": f"**技术指标：**\n{self._format_indicators(indicators)}\n\n**AI分析：**\n{ai_summary}"
+                            "content": ai_summary
                         }
                     },
                     {"tag": "hr"},
@@ -67,7 +76,7 @@ class FeishuNotifier:
                         "elements": [
                             {
                                 "tag": "plain_text",
-                                "content": "以上分析仅供参考，不构成投资建议"
+                                "content": "以上分析仅供参考，不构成投资建议 | AI生成"
                             }
                         ]
                     }
@@ -81,20 +90,6 @@ class FeishuNotifier:
         except Exception as e:
             print(f"Feishu request error: {e}")
             return False
-
-    def _format_indicators(self, indicators: dict) -> str:
-        lines = []
-        if "ma" in indicators:
-            lines.append(f"- MA: {indicators['ma']}")
-        if "macd" in indicators:
-            lines.append(f"- MACD: {indicators['macd']}")
-        if "rsi" in indicators:
-            lines.append(f"- RSI: {indicators['rsi']}")
-        if "kdj" in indicators:
-            lines.append(f"- KDJ: {indicators['kdj']}")
-        if "bollinger" in indicators:
-            lines.append(f"- 布林带: {indicators['bollinger']}")
-        return "\n".join(lines)
 
 
 if __name__ == "__main__":

@@ -210,7 +210,6 @@ def run_daily():
             notifier.send_signal(
                 stock_code=code, stock_name=name,
                 signal=result.get("signal", "N/A"),
-                indicators=result["indicators"],
                 ai_summary=result.get("ai_result", "N/A")
             )
             success_count += 1
