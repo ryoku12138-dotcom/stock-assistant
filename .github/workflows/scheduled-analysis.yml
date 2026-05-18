@@ -56,14 +56,16 @@ jobs:
             echo "mode=${{ inputs.mode }}" >> $GITHUB_OUTPUT
           else
             HOUR_UTC=$(date -u +%H)
+            MINUTE_UTC=$(date -u +%M)
             DAY_OF_WEEK=$(date -u +%u)
-            echo "UTC: ${HOUR_UTC}:00, Day: ${DAY_OF_WEEK}"
-            if [ "$HOUR_UTC" = "01" ]; then
-              echo "mode=morning" >> $GITHUB_OUTPUT
-            elif [ "$HOUR_UTC" = "08" ]; then
-              echo "mode=daily" >> $GITHUB_OUTPUT
-            elif [ "$HOUR_UTC" = "09" ] && [ "$DAY_OF_WEEK" = "5" ]; then
+            echo "UTC: ${HOUR_UTC}:${MINUTE_UTC}, Day: ${DAY_OF_WEEK}"
+            # Priority: weekly (Fri 09:00+) > morning (01:00) > daily (08:00-09:14) > fallback daily
+            if [ "$HOUR_UTC" = "09" ] && [ "$DAY_OF_WEEK" = "5" ]; then
               echo "mode=weekly" >> $GITHUB_OUTPUT
+            elif [ "$HOUR_UTC" = "01" ]; then
+              echo "mode=morning" >> $GITHUB_OUTPUT
+            elif [ "$HOUR_UTC" = "08" ] || ([ "$HOUR_UTC" = "09" ] && [ "${MINUTE_UTC#0}" -lt "15" ]); then
+              echo "mode=daily" >> $GITHUB_OUTPUT
             else
               echo "mode=daily" >> $GITHUB_OUTPUT
             fi
