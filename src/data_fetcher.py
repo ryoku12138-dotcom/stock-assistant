@@ -138,6 +138,81 @@ def get_stock_name(stock_code: str) -> str:
     return stock_code
 
 
+def get_call_auction(stock_code: str, kline: pd.DataFrame = None) -> Optional[dict]:
+    """
+    Get call auction reference data using pre-market minute data.
+    Returns auction volume, open price gap, and volume vs 5-day avg comparison.
+    Falls back to daily K-line if minute data unavailable.
+    """
+    if kline is None:
+        kline = get_kline_daily(stock_code)
+    if kline is None or kline.empty:
+        return None
+
+    recent = kline.tail(5)
+    avg_volume_5d = float(recent["成交量"].mean()) if "成交量" in recent.columns else 0
+
+    auction_vol = None
+    open_price = None
+    prev_close = float(kline["收盘"].iloc[-2]) if len(kline) >= 2 and "收盘" in kline.columns else None
+
+    # Try AKShare minute-level pre-market data (most recent trading day)
+    try:
+        df_min = _retry(ak.stock_zh_a_hist_pre_min_em, symbol=stock_code)
+        if df_min is not None and not df_min.empty:
+            time_col, vol_col, open_col = None, None, None
+            for c in df_min.columns:
+                cs = str(c)
+                if "时间" in cs or "time" in cs.lower():
+                    time_col = c
+                elif "成交量" in cs or "volume" in cs.lower():
+                    vol_col = c
+                elif "开盘" in cs or "open" in cs.lower():
+                    open_col = c
+
+            if time_col and vol_col:
+                auction_times = set(f"09:{m:02d}" for m in range(15, 26))
+                mask = df_min[time_col].astype(str).str[:5].isin(auction_times)
+                auction_rows = df_min[mask]
+                if not auction_rows.empty:
+                    auction_vol = pd.to_numeric(auction_rows[vol_col], errors="coerce").sum()
+                    if open_col:
+                        open_price = float(pd.to_numeric(auction_rows[open_col].iloc[-1], errors="coerce"))
+    except Exception as e:
+        print(f"  [CallAuction] minute fetch failed: {e}")
+
+    # Fallback to daily K-line opening price
+    if open_price is None and "开盘" in kline.columns:
+        open_price = float(kline["开盘"].iloc[-1])
+
+    result = {"open_price": open_price}
+
+    if avg_volume_5d > 0 and auction_vol and auction_vol > 0:
+        ratio = auction_vol / avg_volume_5d * 100
+        if ratio > 25:
+            result["volume_text"] = f"放量({ratio:.0f}%)"
+        elif ratio < 8:
+            result["volume_text"] = f"缩量({ratio:.0f}%)"
+        else:
+            result["volume_text"] = f"正常({ratio:.0f}%)"
+    else:
+        result["volume_text"] = "量能无数据"
+
+    if open_price and prev_close and prev_close > 0:
+        gap = (open_price - prev_close) / prev_close * 100
+        if gap > 0.5:
+            result["gap_text"] = f"高开{gap:+.2f}%"
+        elif gap < -0.5:
+            result["gap_text"] = f"低开{gap:+.2f}%"
+        else:
+            result["gap_text"] = "平开"
+        result["gap_pct"] = round(gap, 2)
+    else:
+        result["gap_text"] = "无竞价数据"
+
+    return result
+
+
 if __name__ == "__main__":
     code = "000001"
     print(f"Testing data fetch for {code}...")

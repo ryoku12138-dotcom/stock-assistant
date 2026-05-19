@@ -23,6 +23,7 @@ from src.config_helper import get_config
 from src.data_fetcher import (
     get_kline_daily, get_financial_data,
     get_fund_flow, get_announcements,
+    get_call_auction,
 )
 from src.technical import analyze, indicators_to_text
 from src.ai_analysis import analyze_stock, check_health
@@ -94,6 +95,7 @@ def analyze_single(stock_code: str, stock_name: str, full: bool = True) -> dict:
         "name": stock_name,
         "indicators": indicators,
         "indicators_str": indicators_str,
+        "kline": df,
     }
 
     if full:
@@ -127,53 +129,106 @@ def _extract_signal(ai_text: str) -> str:
 
 # ======================== Modes ========================
 
+# Signal translation map (English -> Chinese)
+_SIGNAL_CN = {
+    "bullish": "多头",
+    "bearish": "空头",
+    "consolidation": "震荡整理",
+    "golden_cross": "金叉",
+    "death_cross": "死叉",
+    "golden_cross_like": "类金叉",
+    "death_cross_like": "类死叉",
+    "neutral": "中性",
+    "overbought": "超买",
+    "oversold": "超卖",
+    "above_upper": "触及上轨",
+    "below_lower": "触及下轨",
+    "above_middle": "中轨上方",
+    "below_middle": "中轨下方",
+    "insufficient_data": "数据不足",
+}
+
+
+def _cn(v: str) -> str:
+    """Translate signal value to Chinese, pass through if unknown."""
+    return _SIGNAL_CN.get(v, v)
+
+
+def _key_signal(ma: dict, macd: dict, rsi: dict, kdj: dict) -> str:
+    """Produce a one-line summary of the most noteworthy signal."""
+    # Priority: cross signals > extreme RSI > trend alignment
+    if macd.get("signal") == "golden_cross":
+        return "MACD金叉，短期看涨动能增强，关注能否站稳均线"
+    if macd.get("signal") == "death_cross":
+        return "MACD死叉，短期回调风险增加，注意防守"
+    if rsi.get("signal") == "oversold":
+        return f"RSI超卖（{rsi.get('rsi')}），短期或有技术性反弹机会"
+    if rsi.get("signal") == "overbought":
+        return f"RSI超买（{rsi.get('rsi')}），追高风险较大，等待回调"
+    if kdj.get("signal") == "golden_cross_like":
+        return "KDJ金叉形态，短线偏多但需确认"
+    if kdj.get("signal") == "death_cross_like":
+        return "KDJ死叉形态，短线偏空注意风险"
+    if kdj.get("signal") == "overbought":
+        return f"KDJ超买（K:{kdj.get('k')} D:{kdj.get('d')}），短期过热"
+    if kdj.get("signal") == "oversold":
+        return f"KDJ超卖（K:{kdj.get('k')} D:{kdj.get('d')}），存在超跌反弹动能"
+    if ma.get("trend") == "bullish":
+        return "均线多头排列，上升趋势延续中"
+    if ma.get("trend") == "bearish":
+        return "均线空头排列，下行趋势未改，等待企稳"
+    if ma.get("trend") == "consolidation":
+        return "均线缠绕，处于震荡整理区间，方向不明"
+    return "暂无明确信号，建议观望等待方向选择"
+
+
 def run_morning():
-    """Morning pre-market alert: quick indicators only, no AI."""
+    """Morning pre-market alert: indicators + call auction, no AI."""
     config = get_config()
     watchlist = config["watchlist"]
     notifier = FeishuNotifier()
-
     now = now_bjt()
-    lines = [f"**盘前预警 | {now.strftime('%Y-%m-%d %H:%M')}**", ""]
 
-    for entry in watchlist:
+    blocks = [f"盘前预警 | {now.strftime('%Y-%m-%d %H:%M')}\n"]
+
+    for i, entry in enumerate(watchlist, 1):
         code = entry["code"] if isinstance(entry, dict) else entry
         name = entry.get("name", code) if isinstance(entry, dict) else code
-        print(f"  Morning check: {name}({code})...")
+        print(f"  [{i}/{len(watchlist)}] Morning: {name}({code})...")
+
         result = analyze_single(code, name, full=False)
         if result is None:
-            lines.append(f"- **{name}**: 数据获取失败")
+            blocks.append(f"{name}({code}) 数据获取失败\n")
             continue
+
         ind = result["indicators"]
         ma = ind.get("ma", {})
-        rsi = ind.get("rsi", {})
         macd = ind.get("macd", {})
+        rsi = ind.get("rsi", {})
+        kdj = ind.get("kdj", {})
 
-        status_parts = []
-        if ma.get("current"):
-            status_parts.append(f"现价{ma['current']}")
-        status_parts.append(f"MA趋势:{ma.get('trend', 'N/A')}")
-        status_parts.append(f"MACD:{macd.get('signal', 'N/A')}")
-        if rsi.get("rsi"):
-            status_parts.append(f"RSI:{rsi['rsi']}({rsi.get('signal', 'N/A')})")
+        current_price = ma.get("current", "N/A")
+        rsi_val = rsi.get("rsi", "N/A")
+        rsi_str = f"{rsi_val}({_cn(rsi.get('signal', ''))})" if rsi_val != "N/A" else "N/A"
 
-        # Alert for extreme signals
-        alerts = []
-        if macd.get("signal") == "golden_cross":
-            alerts.append("MACD金叉")
-        if macd.get("signal") == "death_cross":
-            alerts.append("MACD死叉")
-        if rsi.get("signal") == "oversold":
-            alerts.append("RSI超卖")
-        if rsi.get("signal") == "overbought":
-            alerts.append("RSI超买")
+        block = (
+            f"{name}({code}) 现价{current_price}元\n"
+            f"均线：{_cn(ma.get('trend', 'N/A'))}"
+            f" | MACD：{_cn(macd.get('signal', 'N/A'))}"
+            f" | RSI：{rsi_str}\n"
+            f"信号：{_key_signal(ma, macd, rsi, kdj)}\n"
+        )
 
-        alert_str = f" ⚠️{' '.join(alerts)}" if alerts else ""
-        lines.append(f"- **{name}**: {'; '.join(status_parts)}{alert_str}")
+        # Call auction data
+        auction = get_call_auction(code, kline=result["kline"])
+        if auction:
+            block += f"竞价参考：{auction.get('volume_text', '')} | {auction.get('gap_text', '')}\n"
+
+        blocks.append(block)
         time_mod.sleep(2)
 
-    content = "\n".join(lines)
-    content += "\n\n以上为技术指标快照，完整分析请等待收盘日报。"
+    content = "\n".join(blocks)
+    content += "\n以上为盘前技术指标与竞价参考，完整分析请等待收盘日报。"
     notifier.send_text(title="盘前预警", content=content)
     print("Morning alert sent.")
 
