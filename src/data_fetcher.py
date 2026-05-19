@@ -138,6 +138,24 @@ def get_stock_name(stock_code: str) -> str:
     return stock_code
 
 
+def is_trading_day() -> bool:
+    """Check if today is an A-share trading day."""
+    from datetime import datetime, timezone, timedelta
+    bjt = timezone(timedelta(hours=8))
+    today = datetime.now(bjt)
+    if today.weekday() >= 5:
+        return False
+    try:
+        df = _retry(ak.tool_trade_date_hist_sina)
+        if df is not None and not df.empty:
+            today_str = today.strftime("%Y%m%d")
+            trade_dates = df["trade_date"].astype(str).tolist()
+            return today_str in trade_dates
+    except Exception:
+        pass
+    return today.weekday() < 5
+
+
 def get_call_auction(stock_code: str, kline: pd.DataFrame = None) -> Optional[dict]:
     """
     Get call auction reference data using pre-market minute data.

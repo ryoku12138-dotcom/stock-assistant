@@ -76,5 +76,6 @@ jobs:
         env:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
           TZ: Asia/Shanghai
         run: python main.py --mode ${{ steps.mode.outputs.mode }}

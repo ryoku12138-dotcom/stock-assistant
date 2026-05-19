@@ -40,17 +40,20 @@ class FeishuNotifier:
             return False
 
     def send_signal(self, stock_code: str, stock_name: str, signal: str,
-                    ai_summary: str) -> bool:
-        """Send AI analysis card. The AI output is displayed directly."""
-        color = "red" if signal == "BUY" else ("green" if signal == "SELL" else "blue")
-        # Extract score from AI output for header
-        header_title = f"{stock_name}({stock_code})"
-        if signal == "BUY":
-            header_title += " | 买入信号"
-        elif signal == "SELL":
-            header_title += " | 卖出信号"
+                    ai_summary: str, continuity: str = "") -> bool:
+        """Send AI analysis card. Displays signal level and continuity status."""
+        if "买入" in signal or signal == "BUY":
+            color = "red"
+        elif "卖出" in signal or signal == "SELL":
+            color = "green"
+        elif "关注" in signal:
+            color = "yellow"
         else:
-            header_title += " | 观望"
+            color = "blue"
+
+        header_title = f"{stock_name}({stock_code}) | {signal}"
+        if continuity:
+            header_title += f" | {continuity}"
 
         payload = {
             "msg_type": "interactive",
@@ -90,6 +93,13 @@ class FeishuNotifier:
         except Exception as e:
             print(f"Feishu request error: {e}")
             return False
+
+    def send_error(self, module: str, detail: str) -> bool:
+        """Send a brief error notification."""
+        return self.send_text(
+            title="错误通知",
+            content=f"模块: {module}\n错误: {detail}\n时间: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
 
 
 if __name__ == "__main__":
