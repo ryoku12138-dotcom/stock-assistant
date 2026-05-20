@@ -79,3 +79,16 @@ jobs:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           TZ: Asia/Shanghai
         run: python main.py --mode ${{ steps.mode.outputs.mode }}
+
+      - name: Commit and push logs
+        if: always()
+        run: |
+          git config user.name "stock-bot"
+          git config user.email "bot@stock-assistant.local"
+          git add logs/ 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No log changes to commit"
+          else
+            git commit -m "auto: update signal logs [skip ci]"
+            git push origin main
+          fi

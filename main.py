@@ -208,6 +208,85 @@ def _direction_cn(d: str) -> str:
     m = {"BUY": "买入", "SELL": "卖出", "HOLD": "观望"}
     return m.get(d, d)
 
+def _weekly_review(watchlist: list) -> str:
+    """Review last week's signal accuracy. Compare signal direction vs actual price change."""
+    bjt = now_bjt()
+    # Last Monday to Friday
+    days_since_mon = bjt.weekday()
+    last_mon = bjt - timedelta(days=days_since_mon + 7)
+    last_fri = last_mon + timedelta(days=4)
+
+    signals_week = {}  # {code: {direction, price, date}}
+    for d_offset in range(5):
+        d = last_mon + timedelta(days=d_offset)
+        path = Path(f"logs/signals_{d.strftime('%Y-%m-%d')}.json")
+        if not path.exists():
+            continue
+        try:
+            with open(path, encoding="utf-8") as f:
+                day_signals = json.load(f)
+            for code, s in day_signals.items():
+                if s.get("direction") in ("买入", "卖出"):
+                    signals_week[code] = {
+                        "direction": s["direction"],
+                        "price": s.get("price"),
+                        "date": d.strftime("%m-%d"),
+                    }
+        except Exception:
+            pass
+
+    if not signals_week:
+        return "上周无买入/卖出信号记录，无法复盘"
+
+    # Get current prices for all signaled stocks
+    lines = []
+    correct = 0
+    total = 0
+    for code, sig in signals_week.items():
+        # Find stock name from watchlist
+        name = code
+        for e in watchlist:
+            ec = e["code"] if isinstance(e, dict) else e
+            if ec == code:
+                name = e.get("name", code) if isinstance(e, dict) else code
+                break
+
+        # Get latest price
+        try:
+            kline = get_kline_daily(code)
+            if kline is not None and not kline.empty and "收盘" in kline.columns:
+                latest_close = float(kline["收盘"].iloc[-1])
+            else:
+                continue
+        except Exception:
+            continue
+
+        sig_price = sig["price"]
+        if sig_price is None or sig_price == 0:
+            continue
+
+        pct = (latest_close - sig_price) / sig_price * 100
+        total += 1
+
+        if sig["direction"] == "买入":
+            hit = pct > 0
+        else:  # 卖出
+            hit = pct < 0
+
+        if hit:
+            correct += 1
+
+        status = "✅" if hit else "❌"
+        lines.append(
+            f"{status} {name}({code}) | {sig['date']} {sig['direction']}@{sig_price} → "
+            f"现价{latest_close} ({pct:+.2f}%)"
+        )
+
+    accuracy = correct / total * 100 if total > 0 else 0
+    header = f"📈 上周信号复盘 | 准确率: {correct}/{total} = {accuracy:.0f}%\n"
+    return header + "\n".join(lines)
+
+
 def _morning_score(ma, macd, rsi, kdj, auction) -> int:
     s = 0
     t = ma.get("trend", "")
@@ -598,6 +677,11 @@ def run_weekly():
         )
 
     notifier.send_text(title=title, content=weekly_report)
+
+    # Signal review: compare last week's signals with actual price changes
+    review = _weekly_review(watchlist)
+    notifier.send_text(title=f"{title} 信号复盘", content=review)
+
     notifier.send_text(
         title=f"{title} 完成",
         content=f"时间: {now.strftime('%Y-%m-%d %H:%M')}\n已生成周报并推送"
