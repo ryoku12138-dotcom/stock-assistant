@@ -48,7 +48,8 @@ watchlist:
     name: "深圳新星"
   - code: "600879"
     name: "航天电子"
-
+  - code: "002348"
+    name: "高乐股份"
 
 # ---- Schedule ----
 schedule:
